@@ -11,9 +11,9 @@ from sklearn.model_selection import train_test_split
 
 #超参数和全局变量
 parser = argparse.ArgumentParser("学习满意度")
-parser.add_argument('--batch_size', type=int, default=16, help='batch size')
-parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
-parser.add_argument('--epochs', type=int, default=5, help='num of training epochs')
+parser.add_argument('--batch_size', type=int, default=1, help='batch size')
+parser.add_argument('--learning_rate', type=float, default=0.001, help='init learning rate')
+parser.add_argument('--epochs', type=int, default=1, help='num of training epochs')
 parser.add_argument('--kernel_number', type=int, default=16, help='number of kernel')
 parser.add_argument('--hidden_size', type=int, default=128, help='number of hidden cell')
 args = parser.parse_args()
@@ -55,7 +55,7 @@ class Dataset(torch.utils.data.Dataset):
 class Model(nn.Module):
     def __init__(self):
         super(Model,self).__init__()
-        self.embedding=nn.Embedding(10,4)   #前一个指编码中的最大数，后一个指第三维是多少
+        self.embedding=nn.Embedding(20,16)   #前一个指编码中的最大数，后一个指第三维是多少
         #卷积层，第一个是卷积核，然后最大池化，然后
         self.Cnn_model5=nn.Sequential(
             nn.Conv1d(in_channels=53,out_channels=args.kernel_number,kernel_size=5,stride=1,padding=2),#我这里还是第二维是域名的长度，第三维是特征，out_channel理解为卷积核的个,卷积是在第二维度
@@ -102,35 +102,35 @@ class Model(nn.Module):
         )
         self.linear_model2 = nn.Sequential(
             nn.Linear(53, 128),
-            nn.ReLU(),
+            # nn.ReLU(),
             nn.Linear(128, 128),
-            nn.ReLU(),
+            # nn.ReLU(),
             nn.Linear(128, 128),
-            nn.ReLU(),
+            # nn.ReLU(),
             nn.Linear(128, 128),
-            nn.ReLU(),
+            # nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
-            nn.Linear(32, 13),
-            nn.Softmax()
-            # nn.Sigmoid(),
-            # nn.Linear(16, 4),
-            # nn.Sigmoid(),
-            # nn.Linear(4, 1)
+            nn.Linear(32, 16),
+            # nn.Softmax()
+            nn.Sigmoid(),
+            nn.Linear(16, 4),
+            nn.Sigmoid(),
+            nn.Linear(4, 1)
         )
         # self.softmax=nn.Softmax(dim=1)
 
 
 
     def forward(self,x):
-        # x=self.embedding(x)      #维度是(batch_size,seq_length,embedding_dim)
+        x=self.embedding(x)      #维度是(batch_size,seq_length,embedding_dim)
 
-        # x3=self.Cnn_model3(x)
-        # x4=self.Cnn_model4(x)
-        # x5=self.Cnn_model5(x)
-        # #
-        # x0=torch.cat((x5,x3,x4),dim=2)   #这个地方是最终的输入维度（batch_size,max_document_length,310）
+        x3=self.Cnn_model3(x)
+        x4=self.Cnn_model4(x)
+        x5=self.Cnn_model5(x)
+        #
+        x0=torch.cat((x5,x3,x4),dim=2)   #这个地方是最终的输入维度（batch_size,max_document_length,310）
         #
         # output,(h_n,c_n)=self.lstm1(x0)
         # output, (h_n, c_n) = self.lstm2(output)
@@ -140,8 +140,8 @@ class Model(nn.Module):
         # output=self.flatten(output)    #维度是(batch_size,max_document_length*hidden_size)
         # output=self.linear_model(output)
         # output = self.flatten(x)
-        output = self.linear_model2(x)
-        return output
+        # output = self.linear_model2(x)
+        return x
 
 
 def get_data():
@@ -153,7 +153,7 @@ def get_data():
     y=[]
     x=[]
     for i in range(0,len):
-        y.append(data[i][0]-3)
+        y.append(data[i][0])
         tmp=[]
         for j in range(1,54):
             tmp.append(data[i][j])
@@ -161,9 +161,9 @@ def get_data():
 
     # 这个地方我提前将其变成tensor张量，后面变非常麻烦
     y = torch.Tensor(y)
-    x = torch.Tensor(x)
+    x = torch.IntTensor(x)
 
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3,random_state=20)  # 划分训练集和测试集，并且设置随机种子
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3,random_state=2022)  # 划分训练集和测试集，并且设置随机种子
     # print(x_train)
     return x_train, x_test, y_train, y_test
 
@@ -186,95 +186,102 @@ def main():
     model = Model()
     model = model.to(device)
 
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.MSELoss()
     loss_fn = loss_fn.to(device)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate)
 
-    # #这个地方为了搭建网络模型结构进行局部测试
-    # for data in train_queue:
-    #     input,label=data
-    #     input = Variable(input)
-    #     label = Variable(label)
-    #     input=input.to(device)
-    #     label=label.to(device)
-    #     output=model(input)
-    #     print(output.shape)
+    #这个地方为了搭建网络模型结构进行局部测试
+    for data in train_queue:
+        input,label=data
+        input = Variable(input)
+        label = Variable(label)
+        input=input.to(device)
+        label=label.to(device)
+        output=model(input)
+        print(output.shape)
 
-    # 开始训练
-    for i in range(args.epochs):
-        # 记录训练的次数
-        total_trainstep = 0
-        # 记录测试的次数
-        total_validstep = 0
-        print("--------------第{}轮训练开始--------------".format(i + 1))
-        logging.info("--------------第{}轮训练开始--------------".format(i + 1))
-
-        model.train()
-        for data in train_queue:
-            input, label = data
-            input = Variable(input)
-            label = Variable(label)
-            input = input.to(device)
-            label = label.to(device)
-            output = model(input)
-            # print(output.shape)
-
-            # print(label)
-            # pre=output.argmax(1)
-            # print(pre)
-            loss = loss_fn(output, label.long())
-
-            # print(loss)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_trainstep = total_trainstep + 1
-
-            if (total_trainstep % 1 == 0):
-                print("训练次数：{} , loss :{}".format(total_trainstep, loss))
-                logging.info("训练次数：{} , loss :{}".format(total_trainstep, loss))
-
-        # 测试步骤
-        model.eval()
-        with torch.no_grad():
-            for data1 in valid_queue:
-                final_true = []
-                final_pridict = []
-                input1, label1 = data1
-                input1 = Variable(input1)
-                label1 = Variable(label1)
-                input1 = input1.to(device)
-                label1 = label1.to(device)
-
-                output1 = model(input1)
-                loss1 = loss_fn(output1, label1.long())
-                print(output1)
-                # print(label1)
-                # for ii in range(0, args.batch_size):
-                #     final_pridict.append(output1[ii][0])
-                #     final_true.append(label1[ii])
-                for ii in range(0, args.batch_size):
-                    final_pridict.append(output1.cpu().argmax(1)[ii])
-                    final_true.append(label1.cpu()[ii])
-            print(final_pridict,final_true)
-        #             #写进文件中
-        #             if(i==args.epochs-1):
-        #                 final_write = []
-        #                 final_write.append(output1[ii][0])
-        #                 final_write.append(label1[ii])
-        #                 csv_writer.writerow(final_write)
-        #
-        # #
-        #         total_validstep = total_validstep + 1
-        #
-        #         if (total_validstep % 5 == 0):
-        #             print("测试次数：{} , 预测情况 :{} , 实际情况:{}".format(total_validstep, final_pridict,final_true))
-        #             logging.info("测试次数：{} , 预测情况 :{}, 实际情况:{}".format(total_validstep, final_pridict,final_true))
-
-
+    # # 开始训练
+    # for i in range(args.epochs):
+    #     # 记录训练的次数
+    #     total_trainstep = 0
+    #     # 记录测试的次数
+    #     total_validstep = 0
+    #     print("--------------第{}轮训练开始--------------".format(i + 1))
+    #     logging.info("--------------第{}轮训练开始--------------".format(i + 1))
+    #
+    #     model.train()
+    #     totaltrainloss=0
+    #     for data in train_queue:
+    #         input, label = data
+    #         input = Variable(input)
+    #         label = Variable(label)
+    #         input = input.to(device)
+    #         label = label.to(device)
+    #         output = model(input)
+    #         # print(output.shape)
+    #
+    #         # print(label)
+    #         # pre=output.argmax(1)
+    #         # print(pre)
+    #         loss = loss_fn(output, label)
+    #         totaltrainloss+=loss
+    #
+    #         # print(loss)
+    #
+    #         optimizer.zero_grad()
+    #         loss.backward()
+    #         optimizer.step()
+    #
+    #         total_trainstep = total_trainstep + 1
+    #
+    #         if (total_trainstep % 50 == 0):
+    #             print("训练次数：{} , loss :{}".format(total_trainstep, loss))
+    #             logging.info("训练次数：{} , loss :{}".format(total_trainstep, loss))
+    #     print("训练过程中总的损失:{}".format(totaltrainloss))
+    #     logging.info("训练过程中总的损失:{}".format(totaltrainloss))
+    #     # 测试步骤
+    #     model.eval()
+    #     final_true = []
+    #     final_pridict = []
+    #     with torch.no_grad():
+    #         for data1 in valid_queue:
+    #             # final_true = []
+    #             # final_pridict = []
+    #             input1, label1 = data1
+    #             input1 = Variable(input1)
+    #             label1 = Variable(label1)
+    #             input1 = input1.to(device)
+    #             label1 = label1.to(device)
+    #
+    #             output1 = model(input1)
+    #             loss1 = loss_fn(output1, label1)
+    #             # print(output1)
+    #             # print(label1)
+    #             for ii in range(0, args.batch_size):
+    #                 final_pridict.append(output1[ii][0])
+    #                 final_true.append(label1[ii])
+    #             # for ii in range(0, args.batch_size):
+    #             #     final_pridict.append(output1.cpu().argmax(1)[ii])
+    #             #     final_true.append(label1.cpu()[ii])
+    #                 #写进文件中
+    #                 if(i==args.epochs-1):
+    #                     final_write = []
+    #                     final_write.append(output1[ii][0])
+    #                     final_write.append(label1[ii])
+    #                     csv_writer.writerow(final_write)
+    #         print("最终的预测:{},最终的实际结果:{}".format(final_pridict, final_true))
+    #         logging.info("最终的预测:{},最终的实际结果:{}".format(final_pridict, final_true))
+    #         # logging.info(final_pridict,final_true)
+    #     #
+    #     # #
+    #     #         total_validstep = total_validstep + 1
+    #     #
+    #     #         if (total_validstep % 5 == 0):
+    #     #             print("测试次数：{} , 预测情况 :{} , 实际情况:{}".format(total_validstep, final_pridict,final_true))
+    #     #             logging.info("测试次数：{} , 预测情况 :{}, 实际情况:{}".format(total_validstep, final_pridict,final_true))
+    #
+    #
 
 
 if __name__=="__main__":
